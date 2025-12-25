@@ -1,0 +1,252 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>📡</text></svg>">
+<title>Wi-Fi Share</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+<div id="toast"></div>
+
+<div class="container">
+
+{% if not ok %}
+<div class="login-card">
+<h2>🔐 Wi-Fi Share</h2>
+<form method="post" action="/login">
+<input name="p" type="password" placeholder="Enter password" autocomplete="current-password">
+<button type="submit">Unlock</button>
+</form>
+</div>
+
+{% else %}
+<!-- Header -->
+<div class="header">
+<h1>📡 Wi-Fi Share</h1>
+<div class="header-actions">
+<button class="icon-btn" data-action="dark-mode" title="Toggle Dark Mode">🌙</button>
+<a href="/logout" class="logout-btn">Logout</a>
+</div>
+</div>
+
+<!-- Toolbar -->
+<div class="toolbar">
+<button class="tool-btn" data-action="upload" title="Upload Files">
+<span class="icon">⬆️</span>
+<span class="label">Upload</span>
+</button>
+<button class="tool-btn" data-action="new-folder" title="New Folder">
+<span class="icon">📁</span>
+<span class="label">New Folder</span>
+</button>
+<button class="tool-btn" data-action="new-file" title="New Text File">
+<span class="icon">📝</span>
+<span class="label">New File</span>
+</button>
+<div class="toolbar-sep"></div>
+<button class="tool-btn" data-action="select-mode" title="Select Multiple">
+<span class="icon">☑️</span>
+<span class="label">Select</span>
+</button>
+<button class="tool-btn" data-action="clipboard" style="display:none" title="Clipboard">
+<span class="icon">📋</span>
+<span class="label"><span id="clipCount">0</span> items</span>
+</button>
+<div class="toolbar-sep"></div>
+<button class="tool-btn" data-action="stats" title="Storage Stats">
+<span class="icon">📊</span>
+<span class="label">Stats</span>
+</button>
+<button class="tool-btn" data-action="links" title="Shared Links">
+<span class="icon">🔗</span>
+<span class="label">Links</span>
+</button>
+</div>
+
+<!-- Breadcrumb Navigation -->
+<div class="breadcrumb-bar">
+<div class="breadcrumb" id="breadcrumb">
+<span class="crumb" data-path="">🏠 Home</span>
+{% if current_path %}
+{% set parts = current_path.split('/') %}
+{% for i in range(parts|length) %}
+<span class="crumb-sep">/</span>
+<span class="crumb" data-path="{{ '/'.join(parts[:i+1]) }}">{{ parts[i] }}</span>
+{% endfor %}
+{% endif %}
+</div>
+<button class="paste-here-btn" data-action="paste-here" style="display:none">📌 Paste Here</button>
+</div>
+
+<!-- Stats Panel -->
+<div class="stats-panel" id="statsPanel" style="display:none">
+<div class="stat-card">
+<div class="stat-icon">📄</div>
+<div class="stat-info">
+<div class="stat-value" id="statFiles">0</div>
+<div class="stat-label">Files</div>
+</div>
+</div>
+<div class="stat-card">
+<div class="stat-icon">📁</div>
+<div class="stat-info">
+<div class="stat-value" id="statFolders">0</div>
+<div class="stat-label">Folders</div>
+</div>
+</div>
+<div class="stat-card">
+<div class="stat-icon">💾</div>
+<div class="stat-info">
+<div class="stat-value" id="statSize">0 B</div>
+<div class="stat-label">Storage</div>
+</div>
+</div>
+</div>
+
+<!-- Upload Panel -->
+<div class="panel" id="uploadPanel" style="display:none">
+<div class="panel-header">
+<h3>📤 Upload Files</h3>
+<button class="close-btn" data-close="uploadPanel">✕</button>
+</div>
+<div class="panel-content">
+<label>Destination:</label>
+<select id="target" class="input-field">
+<option value="">Current folder</option>
+{% for f in folders %}
+<option value="{{f}}">{{f}}</option>
+{% endfor %}
+</select>
+<input id="newfolder" placeholder="Or create new subfolder" class="input-field">
+<div class="upload-buttons">
+<button class="upload-btn" data-pick="files">📄 Files</button>
+<button class="upload-btn" data-pick="folder">📁 Folder</button>
+<button class="upload-btn" data-pick="cameraPhoto">📷 Photo</button>
+<button class="upload-btn" data-pick="cameraVideo">🎥 Video</button>
+</div>
+<input id="files" type="file" multiple hidden>
+<input id="folder" type="file" webkitdirectory hidden>
+<input id="cameraPhoto" type="file" accept="image/*" capture="environment" hidden>
+<input id="cameraVideo" type="file" accept="video/*" capture hidden>
+<div id="queue"></div>
+<div class="progress-bar" id="prog" style="display:none">
+<div class="progress-fill" id="bar"></div>
+</div>
+<button class="primary-btn" data-action="start-upload">Upload Selected</button>
+</div>
+</div>
+
+<!-- Links Panel -->
+<div class="panel" id="linksPanel" style="display:none">
+<div class="panel-header">
+<h3>🔗 Shared Links</h3>
+<button class="close-btn" data-close="linksPanel">✕</button>
+</div>
+<div class="panel-content">
+<input id="newLinkName" placeholder="Link name" class="input-field">
+<input id="newLinkUrl" placeholder="Paste URL here" class="input-field">
+<button class="primary-btn" data-action="add-link">Add Link</button>
+<div id="linksBox" class="links-list"></div>
+</div>
+</div>
+
+<!-- Bulk Actions Bar -->
+<div class="bulk-bar" id="bulkBar" style="display:none">
+<button class="bulk-btn" data-action="bulk-copy">📋 Copy</button>
+<button class="bulk-btn" data-action="bulk-cut">✂️ Cut</button>
+<button class="bulk-btn" data-action="bulk-paste">📌 Paste</button>
+<button class="bulk-btn bulk-delete" data-action="bulk-delete">🗑 Delete</button>
+<button class="bulk-btn" data-action="cancel-bulk">❌ Cancel</button>
+<span class="bulk-count" id="bulkCount">0 selected</span>
+</div>
+
+<!-- Search & Filter -->
+<div class="filter-bar">
+<input id="search" placeholder="🔍 Search files..." class="search-input">
+<select id="filter" class="filter-select">
+<option value="all">All Types</option>
+<option value="folder">📁 Folders</option>
+<option value="image">🖼 Images</option>
+<option value="video">🎬 Videos</option>
+<option value="audio">🎵 Audio</option>
+<option value="zip">📦 Archives</option>
+<option value="document">📕 Documents</option>
+<option value="other">📄 Other</option>
+</select>
+<select id="sort" class="filter-select">
+<option value="name-asc">Name ↑</option>
+<option value="name-desc">Name ↓</option>
+<option value="date-new">Newest First</option>
+<option value="date-old">Oldest First</option>
+<option value="size-large">Largest First</option>
+<option value="size-small">Smallest First</option>
+</select>
+</div>
+
+<!-- File List -->
+<div class="file-list" id="list">
+{% for i in items %}
+<div class="file-row" 
+     data-path="{{ i.path }}"
+     data-name="{{ i.name|lower }}"
+     data-type="{% if i.is_dir %}folder{% elif i.name.lower().endswith(('jpg','jpeg','png','gif','webp')) %}image{% elif i.name.lower().endswith(('mp4','mkv','avi','mov')) %}video{% elif i.name.lower().endswith(('mp3','wav','m4a','flac')) %}audio{% elif i.name.lower().endswith(('zip','rar','7z')) %}zip{% elif i.name.lower().endswith(('pdf','doc','docx','xls','pptx','ppt','xlsx','odt')) %}document{% else %}other{% endif %}"
+     data-mtime="{{ i.mtime }}"
+     data-size="{{ i.size }}"
+     data-isdir="{{ 'true' if i.is_dir else 'false' }}">
+    
+    <input type="checkbox" class="row-checkbox" style="display:none">
+    
+    <div class="file-icon">
+        {% if i.is_dir %}📁
+        {% elif i.name.lower().endswith(('jpg','jpeg','png','gif','webp')) %}🖼
+        {% elif i.name.lower().endswith(('mp4','mkv','avi','mov')) %}🎬
+        {% elif i.name.lower().endswith(('mp3','wav','m4a','flac')) %}🎵
+        {% elif i.name.lower().endswith(('zip','rar','7z')) %}📦
+        {% elif i.name.lower().endswith(('pdf','doc','docx','xls','pptx','ppt','xlsx','odt')) %}📕
+        {% else %}📄{% endif %}
+    </div>
+    
+    <div class="file-info">
+        <div class="file-name">{{ i.name }}</div>
+        <div class="file-meta">
+            {% if i.is_dir %}
+            Folder
+            {% else %}
+            {{ (i.size / 1024)|round(1) }} KB
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="file-actions">
+        <button class="action-btn" data-action="file-menu" title="More">⋮</button>
+    </div>
+</div>
+{% endfor %}
+
+{% if not items %}
+<div class="empty-state">
+    <div class="empty-icon">📂</div>
+    <div class="empty-text">This folder is empty</div>
+    <div class="empty-hint">Upload files or create folders to get started</div>
+</div>
+{% endif %}
+</div>
+
+{% endif %}
+</div>
+
+<!-- Modal -->
+<div class="modal" id="modal">
+    <div class="modal-backdrop"></div>
+    <div class="modal-box" id="modalBox"></div>
+</div>
+
+<!-- Context Menu -->
+<div class="context-menu" id="contextMenu" style="display:none"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
